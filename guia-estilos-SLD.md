@@ -1,71 +1,100 @@
-# 🗺️ Guía Maestra: Filtrado de Datos en Estilos SLD (GeoServer)
+# 🗺️ Guía Maestra de Estilos SLD y Filtrado OGC en GeoServer
 
-Esta guía explica cómo utilizar el estándar **OGC Filter Encoding** dentro de los archivos **SLD (Styled Layer Descriptor)**. Aprenderás a controlar qué elementos geográficos se dibujan en el mapa basándote en sus atributos y su geometría.
-
----
-
-## 1. Introducción al Concepto de Filtro
-En cartografía digital, no siempre queremos dibujar todos los datos de la misma forma. Un **Filtro** es una regla lógica que evalúa cada fila de nuestra base de datos (PostGIS, Shapefile, etc.). 
-* Si la regla es **VERDADERA**, el elemento se dibuja con el estilo definido.
-* Si es **FALSA**, el elemento se ignora o pasa a la siguiente regla.
+Esta guía técnica proporciona una referencia completa sobre el uso de **OGC Filter Encoding** dentro de los archivos **SLD (Styled Layer Descriptor)**. Es un recurso esencial para estudiantes de ingeniería, geografía y desarrolladores GIS que buscan dominar la simbología dinámica en servidores de mapas.
 
 ---
 
-## 2. Operadores de Comparación (Atributos)
-Se utilizan para comparar una columna de datos (`PropertyName`) con un valor específico (`Literal`).
+## 📖 1. Fundamentos del Filtrado
+En GeoServer, un filtro es una expresión lógica que determina qué objetos espaciales (features) reciben un estilo específico. Se basa en el estándar **XML**, por lo que la jerarquía y el cierre de etiquetas son fundamentales.
 
-| Operador | Significado | Uso Pedagógico |
+La estructura básica de una regla con filtro es:
+1.  **`<Rule>`**: Contenedor de la lógica y el estilo.
+2.  **`<ogc:Filter>`**: Define la condición.
+3.  **`<Symbolizer>`**: Define cómo se ve el dato si cumple la condición (Punto, Línea o Polígono).
+
+---
+
+## 📑 2. Catálogo de Operadores Lógicos y de Comparación
+
+### A. Comparación de Atributos (Numéricos y Texto)
+| Etiqueta OGC | Descripción | Ejemplo de Uso |
 | :--- | :--- | :--- |
-| `<PropertyIsEqualTo>` | **Igual a** | Para clasificar categorías exactas (ej. Tipo = 'Autopista'). |
-| `<PropertyIsNotEqualTo>` | **Distinto de** | Para excluir elementos específicos del mapa. |
-| `<PropertyIsLessThan>` | **Menor que** | Para representar rangos numéricos bajos. |
-| `<PropertyIsGreaterThan>` | **Mayor que** | Para resaltar valores altos (ej. Población > 1,000,000). |
-| `<PropertyIsBetween>` | **Está entre** | Ideal para rangos intermedios (requiere un límite inferior y superior). |
-| `<PropertyIsLike>` | **Similar a** | Búsqueda parcial de texto (usa `*` como comodín). |
-| `<PropertyIsNull>` | **Es nulo** | Para identificar dónde faltan datos en la tabla. |
+| `<ogc:PropertyIsEqualTo>` | **Igual a** | `ESTADO = 'Activo'` |
+| `<ogc:PropertyIsNotEqualTo>` | **Distinto de** | `CATEGORIA != 'Temporal'` |
+| `<ogc:PropertyIsGreaterThan>` | **Mayor que** | `POBLACION > 5000` |
+| `<ogc:PropertyIsLessThan>` | **Menor que** | `DISTANCIA < 100` |
+| `<ogc:PropertyIsBetween>` | **Rango inclusivo** | `ALTURA` entre 10 y 20 |
+| `<ogc:PropertyIsLike>` | **Búsqueda parcial** | `NOMBRE` empieza con 'San' |
+| `<ogc:PropertyIsNull>` | **Valor Nulo** | Detectar campos vacíos |
+
+### B. Operadores Lógicos (Combinación)
+Para consultas complejas, envolvemos los operadores anteriores en:
+* **`<ogc:And>`**: Se deben cumplir todas las condiciones.
+* **`<ogc:Or>`**: Se debe cumplir al menos una.
+* **`<ogc:Not>`**: Niega la condición (selecciona lo opuesto).
 
 ---
 
-## 3. Operadores Lógicos (Combinaciones)
-A veces una sola condición no es suficiente. Los operadores lógicos nos permiten crear reglas complejas:
+## 🛰️ 3. Operadores Espaciales
+GeoServer permite filtrar por geometría. Estos son los más comunes:
 
-> 💡 **Ejemplo de lógica:** "Quiero ver los ríos que sean *principales* **Y** que tengan una *longitud mayor a 500km*."
-
-* **`<And>`**: Todas las condiciones internas deben ser ciertas.
-* **`<Or>`**: Basta con que una de las condiciones sea cierta.
-* **`<Not>`**: Invierte el resultado (lo que era verdad ahora es falso).
+1.  **`<ogc:BBOX>`**: Filtra elementos dentro de un cuadro delimitador (Bounding Box).
+2.  **`<ogc:Intersects>`**: Selecciona elementos que se tocan o cruzan.
+3.  **`<ogc:DWithin>`**: Filtra elementos a una **distancia máxima** de otro punto o línea (útil para áreas de influencia).
 
 ---
 
-## 4. El Filtro "Por Defecto" (`<ElseFilter/>`)
-Este es un recurso pedagógico vital. El `<ElseFilter/>` actúa como una "red de seguridad". Se coloca en la última regla para atrapar todos los elementos que **no cumplieron** ninguna de las condiciones anteriores. 
-
-*Evita que queden "huecos" o datos sin representar en tu mapa.*
-
----
-
-## 5. Operadores Espaciales (Avanzado)
-SLD no solo filtra por números o letras, ¡también por el espacio!
-
-* **`<Intersects>`**: Filtra elementos que toquen una zona específica.
-* **`<Within>`**: Filtra elementos que estén totalmente contenidos dentro de un polígono.
-* **`<DWithin>`**: (Distance Within) Filtra elementos que se encuentren a una distancia "X" de un punto (ej. "Hospitales a menos de 5km").
-
----
-
-## 6. Ejemplo Práctico: Clasificación de Ríos
-A continuación, un ejemplo de cómo se estructuran estas reglas en el código:
+## 🛠️ 4. Ejemplo Práctico: Clasificación de una Red Hidrográfica
+Este ejemplo muestra cómo organizar niveles de jerarquía en un solo archivo SLD.
 
 ```xml
 <Rule>
+  <Name>rio_principal</Name>
+  <Title>Ríos Mayores a 500km</Title>
   <ogc:Filter>
     <ogc:PropertyIsGreaterThan>
       <ogc:PropertyName>longitud_km</ogc:PropertyName>
       <ogc:Literal>500</ogc:Literal>
     </ogc:PropertyIsGreaterThan>
   </ogc:Filter>
-  </Rule>
+  <LineSymbolizer>
+    <Stroke>
+      <CssParameter name="stroke">#0000FF</CssParameter>
+      <CssParameter name="stroke-width">3</CssParameter>
+    </Stroke>
+  </LineSymbolizer>
+</Rule>
 
 <Rule>
-  <ElseFilter/>
-  </Rule>
+  <Name>rio_secundario</Name>
+  <ogc:Filter>
+    <ogc:And>
+      <ogc:PropertyIsGreaterThanOrEqualTo>
+        <ogc:PropertyName>longitud_km</ogc:PropertyName>
+        <ogc:Literal>100</ogc:Literal>
+      </ogc:PropertyIsGreaterThanOrEqualTo>
+      <ogc:PropertyIsLessThanOrEqualTo>
+        <ogc:PropertyName>longitud_km</ogc:PropertyName>
+        <ogc:Literal>500</ogc:Literal>
+      </ogc:PropertyIsLessThanOrEqualTo>
+    </ogc:And>
+  </ogc:Filter>
+  <LineSymbolizer>
+    <Stroke>
+      <CssParameter name="stroke">#4A90E2</CssParameter>
+      <CssParameter name="stroke-width">1.5</CssParameter>
+    </Stroke>
+  </LineSymbolizer>
+</Rule>
+
+<Rule>
+  <Name>otros</Name>
+  <Title>Cuerpos de agua menores</Title>
+  <ElseFilter/> <LineSymbolizer>
+    <Stroke>
+      <CssParameter name="stroke">#A4C2F4</CssParameter>
+      <CssParameter name="stroke-width">0.5</CssParameter>
+      <CssParameter name="stroke-dasharray">4 2</CssParameter>
+    </Stroke>
+  </LineSymbolizer>
+</Rule>
